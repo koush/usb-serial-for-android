@@ -109,8 +109,6 @@ public class ProlificSerialDriver implements UsbSerialDriver {
 
         private int mDeviceType = DEVICE_TYPE_HX;
 
-        private UsbEndpoint mReadEndpoint;
-        private UsbEndpoint mWriteEndpoint;
         private UsbEndpoint mInterruptEndpoint;
 
         private int mControlLinesValue = 0;
@@ -364,55 +362,6 @@ public class ProlificSerialDriver implements UsbSerialDriver {
                     mConnection = null;
                 }
             }
-        }
-
-        @Override
-        public int read(byte[] dest, int timeoutMillis) throws IOException {
-            synchronized (mReadBufferLock) {
-                int readAmt = Math.min(dest.length, mReadBuffer.length);
-                int numBytesRead = mConnection.bulkTransfer(mReadEndpoint, mReadBuffer,
-                        readAmt, timeoutMillis);
-                if (numBytesRead < 0) {
-                    return 0;
-                }
-                System.arraycopy(mReadBuffer, 0, dest, 0, numBytesRead);
-                return numBytesRead;
-            }
-        }
-
-        @Override
-        public int write(byte[] src, int timeoutMillis) throws IOException {
-            int offset = 0;
-
-            while (offset < src.length) {
-                final int writeLength;
-                final int amtWritten;
-
-                synchronized (mWriteBufferLock) {
-                    final byte[] writeBuffer;
-
-                    writeLength = Math.min(src.length - offset, mWriteBuffer.length);
-                    if (offset == 0) {
-                        writeBuffer = src;
-                    } else {
-                        // bulkTransfer does not support offsets, make a copy.
-                        System.arraycopy(src, offset, mWriteBuffer, 0, writeLength);
-                        writeBuffer = mWriteBuffer;
-                    }
-
-                    amtWritten = mConnection.bulkTransfer(mWriteEndpoint,
-                            writeBuffer, writeLength, timeoutMillis);
-                }
-
-                if (amtWritten <= 0) {
-                    throw new IOException("Error writing " + writeLength
-                            + " bytes at offset " + offset + " length="
-                            + src.length);
-                }
-
-                offset += amtWritten;
-            }
-            return offset;
         }
 
         @Override

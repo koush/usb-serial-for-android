@@ -21,10 +21,14 @@
 
 package com.hoho.android.usbserial.driver;
 
+import android.annotation.SuppressLint;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
+import android.hardware.usb.UsbEndpoint;
+import android.hardware.usb.UsbRequest;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * A base class shared by several driver implementations.
@@ -50,6 +54,10 @@ abstract class CommonUsbSerialPort implements UsbSerialPort {
 
     /** Internal write buffer.  Guarded by {@link #mWriteBufferLock}. */
     protected byte[] mWriteBuffer;
+
+    protected boolean mEnableAsyncReads;
+    protected UsbEndpoint mReadEndpoint;
+    protected UsbEndpoint mWriteEndpoint;
 
     public CommonUsbSerialPort(UsbDevice device, int portNumber) {
         mDevice = device;
@@ -125,11 +133,74 @@ abstract class CommonUsbSerialPort implements UsbSerialPort {
     @Override
     public abstract void close() throws IOException;
 
+    @SuppressLint("NewApi")
     @Override
-    public abstract int read(final byte[] dest, final int timeoutMillis) throws IOException;
+    public int read(byte[] dest, int offset, int length, int timeoutMillis) throws IOException {
+        if (mEnableAsyncReads) {
+            final UsbRequest request = new UsbRequest();
+            try {
+                request.initialize(mConnection, mReadEndpoint);
+                final ByteBuffer buf = ByteBuffer.wrap(dest, offset, length);
+                if (!request.queue(buf)) {
+                    throw new IOException("Error queueing request.");
+                }
+
+                final UsbRequest response = mConnection.requestWait();
+                if (response == null) {
+                    throw new IOException("Null response");
+                }
+
+                final int nread = buf.position() - offset;
+                if (nread > 0) {
+                    //Log.d(TAG, HexDump.dumpHexString(dest, 0, Math.min(32, dest.length)));
+                    return nread;
+                } else {
+                    return 0;
+                }
+            } finally {
+                request.close();
+            }
+        }
+
+        final int numBytesRead;
+        synchronized (mReadBufferLock) {
+            numBytesRead = mConnection.bulkTransfer(mReadEndpoint, dest, offset, length,
+                    timeoutMillis);
+            if (numBytesRead < 0) {
+                // This sucks: we get -1 on timeout, not 0 as preferred.
+                // We *should* use UsbRequest, except it has a bug/api oversight
+                // where there is no way to determine the number of bytes read
+                // in response :\ -- http://b.android.com/28023
+
+                // @koush: Workaround is to never block/loop on this reads, and watch writes for
+                // exceptions to cancel the reads.
+
+                if (timeoutMillis == Integer.MAX_VALUE) {
+                    // Hack: Special case "~infinite timeout" as an error.
+                    return -1;
+                }
+
+                return 0;
+            }
+        }
+        return numBytesRead;
+    }
 
     @Override
-    public abstract int write(final byte[] src, final int timeoutMillis) throws IOException;
+    public int write(byte[] src, int offset, int length, int timeoutMillis) throws IOException {
+        final int amtWritten;
+
+        synchronized (mWriteBufferLock) {
+            amtWritten = mConnection.bulkTransfer(mWriteEndpoint, src, length,
+                    timeoutMillis);
+        }
+        if (amtWritten <= 0) {
+            throw new IOException("Error writing " + length
+                    + " bytes at offset " + offset);
+        }
+
+        return amtWritten;
+    }
 
     @Override
     public abstract void setParameters(

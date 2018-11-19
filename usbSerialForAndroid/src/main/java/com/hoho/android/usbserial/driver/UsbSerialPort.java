@@ -121,7 +121,7 @@ public interface UsbSerialPort {
      * @return the actual number of bytes read
      * @throws IOException if an error occurred during reading
      */
-    public int read(final byte[] dest, final int timeoutMillis) throws IOException;
+    public int read(final byte[] dest, int offset, int length, final int timeoutMillis) throws IOException;
 
     /**
      * Writes as many bytes as possible from the source buffer.
@@ -131,7 +131,7 @@ public interface UsbSerialPort {
      * @return the actual number of bytes written
      * @throws IOException if an error occurred during writing
      */
-    public int write(final byte[] src, final int timeoutMillis) throws IOException;
+    public int write(final byte[] src, int offset, int length, final int timeoutMillis) throws IOException;
 
     /**
      * Sets various serial port parameters.

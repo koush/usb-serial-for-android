@@ -70,9 +70,6 @@ public class Ch34xSerialDriver implements UsbSerialDriver {
 		private boolean dtr = false;
 		private boolean rts = false;
 
-		private UsbEndpoint mReadEndpoint;
-		private UsbEndpoint mWriteEndpoint;
-
 		public Ch340SerialPort(UsbDevice device, int portNumber) {
 			super(device, portNumber);
 		}
@@ -141,60 +138,6 @@ public class Ch34xSerialDriver implements UsbSerialDriver {
 			} finally {
 				mConnection = null;
 			}
-		}
-
-
-		@Override
-		public int read(byte[] dest, int timeoutMillis) throws IOException {
-			final int numBytesRead;
-			synchronized (mReadBufferLock) {
-				int readAmt = Math.min(dest.length, mReadBuffer.length);
-				numBytesRead = mConnection.bulkTransfer(mReadEndpoint, mReadBuffer, readAmt,
-						timeoutMillis);
-				if (numBytesRead < 0) {
-					// This sucks: we get -1 on timeout, not 0 as preferred.
-					// We *should* use UsbRequest, except it has a bug/api oversight
-					// where there is no way to determine the number of bytes read
-					// in response :\ -- http://b.android.com/28023
-					return 0;
-				}
-				System.arraycopy(mReadBuffer, 0, dest, 0, numBytesRead);
-			}
-			return numBytesRead;
-		}
-
-		@Override
-		public int write(byte[] src, int timeoutMillis) throws IOException {
-			int offset = 0;
-
-			while (offset < src.length) {
-				final int writeLength;
-				final int amtWritten;
-
-				synchronized (mWriteBufferLock) {
-					final byte[] writeBuffer;
-
-					writeLength = Math.min(src.length - offset, mWriteBuffer.length);
-					if (offset == 0) {
-						writeBuffer = src;
-					} else {
-						// bulkTransfer does not support offsets, make a copy.
-						System.arraycopy(src, offset, mWriteBuffer, 0, writeLength);
-						writeBuffer = mWriteBuffer;
-					}
-
-					amtWritten = mConnection.bulkTransfer(mWriteEndpoint, writeBuffer, writeLength,
-							timeoutMillis);
-				}
-				if (amtWritten <= 0) {
-					throw new IOException("Error writing " + writeLength
-							+ " bytes at offset " + offset + " length=" + src.length);
-				}
-
-				Log.d(TAG, "Wrote amt=" + amtWritten + " attempted=" + writeLength);
-				offset += amtWritten;
-			}
-			return offset;
 		}
 
 		private int controlOut(int request, int value, int index) {
