@@ -24,6 +24,7 @@ package com.hoho.android.usbserial.driver;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 
+import java.io.Closeable;
 import java.io.IOException;
 
 /**
@@ -31,7 +32,7 @@ import java.io.IOException;
  *
  * @author mike wakerly (opensource@hoho.com)
  */
-public interface UsbSerialPort {
+public interface UsbSerialPort extends Closeable {
 
     /** 5 data bits. */
     public static final int DATABITS_5 = 5;
